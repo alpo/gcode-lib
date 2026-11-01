@@ -180,6 +180,29 @@ def test_advance_state_rotational_on_arc():
     assert st.a == pytest.approx(90.0)
 
 
+def test_advance_state_all_rotational_axes_on_absolute_arc():
+    st = _state_after("G90\nG2 X10 Y0 I5 J0 A1 B2 C3")
+    assert (st.a, st.b, st.c) == pytest.approx((1.0, 2.0, 3.0))
+
+
+def test_advance_state_all_rotational_axes_on_relative_arc():
+    st = _state_after("G91\nG1 A10 B1 C2\nG2 X10 Y0 I5 J0 A90 B2 C3")
+    assert (st.a, st.b, st.c) == pytest.approx((100.0, 3.0, 5.0))
+
+
+def test_modal_state_copy_keeps_rotational_axes():
+    original = gl.ModalState(a=1.0, b=2.0, c=3.0)
+    duplicate = original.copy()
+    original.a = 9.0
+    assert (duplicate.a, duplicate.b, duplicate.c) == (1.0, 2.0, 3.0)
+
+
+def test_modal_state_rotational_fields_do_not_shift_positional_arguments():
+    state = gl.ModalState(True, True, True, 1.0, 2.0, 3.0, 4.0, 5.0)
+    assert (state.e, state.f) == (4.0, 5.0)
+    assert (state.a, state.b, state.c) == (0.0, 0.0, 0.0)
+
+
 # ---------------------------------------------------------------------------
 # advance_state — G92 position reset
 # ---------------------------------------------------------------------------

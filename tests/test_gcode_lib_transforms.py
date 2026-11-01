@@ -1001,3 +1001,58 @@ def test_recenter_to_bed_fit_rejects_margin_consuming_the_bed():
     lines = gl.parse_lines("G90\nG1 X0 Y0\nG1 X10 Y10")
     with pytest.raises(ValueError, match="zero or negative"):
         gl.recenter_to_bed(lines, 0, 20, 0, 20, margin=10.0, mode="fit")
+
+
+# ---------------------------------------------------------------------------
+# Rotational axes through G91 conversion, layers and arc linearization
+# ---------------------------------------------------------------------------
+
+def _final_abc(lines):
+    """Replay the written text of *lines* and return the resulting A/B/C position."""
+    state = gl.ModalState()
+    for line in lines:
+        gl.advance_state(state, gl.parse_line(line.raw))
+    return state.a, state.b, state.c
+
+
+def test_to_absolute_xy_accumulates_rotational_axes():
+    lines = gl.parse_lines("G91\nG1 X1 A10 B20 C30\nG1 X1 A10 B20 C30\nG1 A5")
+    result = gl.to_absolute_xy(lines)
+    assert [ln.raw for ln in result] == [
+        "G90", "G1 X1 A10 B20 C30", "G1 X2 A20 B40 C60", "G1 A25",
+    ]
+    assert result[2].words["A"] == pytest.approx(20.0)
+    assert result[2].words["B"] == pytest.approx(40.0)
+    assert result[2].words["C"] == pytest.approx(60.0)
+
+
+def test_to_absolute_xy_rotational_axis_continues_from_absolute_position():
+    result = gl.to_absolute_xy(gl.parse_lines("G90\nG1 A90\nG91\nG1 A10"))
+    assert _final_abc(result) == pytest.approx((100.0, 0.0, 0.0))
+
+
+def test_to_absolute_xy_leaves_omitted_rotational_axes_unwritten():
+    result = gl.to_absolute_xy(gl.parse_lines("G91\nG1 A10\nG1 X5"))
+    assert result[2].raw == "G1 X5"
+
+
+def test_apply_xy_transform_by_layer_keeps_rotational_axes():
+    lines = gl.parse_lines("G90\nG1 X1 Y1 Z5 A30 B40 C50 F100\nG1 X2 Y2 C7")
+    result = gl.apply_xy_transform_by_layer(lines, _shift_x, z_min=5.0)
+    assert result[1].words["X"] == pytest.approx(101.0)
+    assert result[2].words["X"] == pytest.approx(102.0)
+    assert _final_abc(result) == pytest.approx((30.0, 40.0, 7.0))
+
+
+@pytest.mark.parametrize("axis", ["A", "B", "C"])
+def test_linearize_arcs_writes_rotational_word_once(axis):
+    lines = gl.parse_lines(f"G90\nG1 X0 Y0\nG2 X10 Y0 I5 J0 {axis}180")
+    result = gl.linearize_arcs(lines)
+    carrying = [ln for ln in result if axis in ln.words]
+    assert len(carrying) == 1
+    assert f"{axis}180" in carrying[0].raw
+
+
+def test_linearize_arcs_relative_rotational_axes_end_where_source_ends():
+    src = gl.parse_lines("G91\nG1 X10 Y0 A10 B1 C2\nG3 X-10 Y10 I-10 J0 A5 B2 C3")
+    assert _final_abc(gl.linearize_arcs(src)) == pytest.approx(_final_abc(src))

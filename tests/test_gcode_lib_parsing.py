@@ -114,6 +114,10 @@ def test_parse_words_rotational_axes():
     assert d["C"] == pytest.approx(60.0)
 
 
+def test_parse_words_rotational_words_outside_moves_do_not_break_commands():
+    assert gl.parse_line("M862.1 P0.4 A0 F1").command == "M862.1"
+
+
 def test_parse_words_mixed_with_rotational():
     d = gl.parse_words("G1 X10 Y20 Z0.3 A90 B180 C270 E0.1 F3000")
     assert d["A"] == pytest.approx(90.0)
