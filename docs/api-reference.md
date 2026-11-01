@@ -353,8 +353,8 @@ prusalink_upload(base_url: str, api_key: str, gcode_path: str,
 ```
 fmt_float(v: float, places: int) -> str
 fmt_axis(axis: str, v: float, xy_decimals=3, other_decimals=5) -> str
-replace_or_append(code: str, axis: str, val: float,
-                  xy_decimals=3, other_decimals=5) -> str
+replace_or_append(code: str, axis: str, val: Optional[float],
+                  xy_decimals=3, other_decimals=5) -> str  # val=None removes the word
 ```
 
 ### §11 INI Parsing

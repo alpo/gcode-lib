@@ -110,7 +110,7 @@ being modified.  Pass `skip_negative_y=False` to transform all moves.
 ### Formatting helpers
 - `fmt_float(v, places)` — trims trailing zeros
 - `fmt_axis(axis, v)` — axis-aware precision
-- `replace_or_append(code, axis, val)` — update/insert axis word in a code string
+- `replace_or_append(code, axis, val)` — update/insert axis word in a code string; `val=None` removes it
 
 ### Template rendering
 - `render_template(template_text, variables)` — substitute `{lowercase_key}` only; PrusaSlicer conditionals left intact
