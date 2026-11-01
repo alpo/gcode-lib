@@ -49,7 +49,8 @@ class GCodeLine:
              for blank / comment-only lines.
     words:   Axis-word dict parsed from the code portion, e.g.
              ``{"X": 10.0, "Y": 20.0, "E": 1.5}``.
-    comment: Comment portion including the leading ``";"``, or ``""``.
+    comment: Comment portion including its ``";"`` or ``(...)`` delimiters,
+             or ``""``.
     """
     raw: str
     command: str
