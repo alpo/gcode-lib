@@ -67,6 +67,11 @@ code, comment = gl.split_comment("G1 X10 Y20 ; move to start")
 # code    → "G1 X10 Y20"
 # comment → "; move to start"
 
+# Parenthesised comments are moved out of the code, wherever they appear
+code, comment = gl.split_comment("G1 X10 (fast) Y20 ; move")
+# code    → "G1 X10 Y20"
+# comment → "(fast) ; move"
+
 # Parse axis words from a code string
 words = gl.parse_words("G1 X10.5 Y-3.2 E0.012 F3600")
 # words → {"X": 10.5, "Y": -3.2, "E": 0.012, "F": 3600.0}

@@ -218,12 +218,117 @@ def test_parse_paren_with_semicolon():
     assert line.words["X"] == pytest.approx(10.0)
     assert line.words["F"] == pytest.approx(300.0)
     assert "E" not in line.words
-    assert line.comment == "; end"
+    assert line.comment == "(inline comment) ; end"
 
 
 def test_parse_paren_preserves_raw():
     line = gl.parse_line("(Begin operation: Surface006)")
     assert line.raw == "(Begin operation: Surface006)"
+
+
+@pytest.mark.parametrize(
+    "line, code, comment",
+    [
+        pytest.param("(Surface006)", "", "(Surface006)", id="whole-line"),
+        pytest.param("G1 X10 (fast) Y20", "G1 X10 Y20", "(fast)", id="inline"),
+        pytest.param("(a) G1 X1", "G1 X1", "(a)", id="leading"),
+        pytest.param("G1 (a) X1 (b) Y2", "G1 X1 Y2", "(a) (b)", id="several"),
+        pytest.param("(a ; b) G1 X1", "G1 X1", "(a ; b)", id="semicolon-inside"),
+        pytest.param("G1 X1 (a) ; b (c", "G1 X1", "(a) ; b (c", id="paren-after-semicolon"),
+        pytest.param("((E5)) G1 X1", "G1 X1", "((E5))", id="nested"),
+        pytest.param("G1 X1 (open E5", "G1 X1", "(open E5", id="unclosed"),
+        pytest.param("G1 X1 ) Y2 (c)", "G1 X1 ) Y2", "(c)", id="stray-close"),
+    ],
+)
+def test_split_comment_parentheses(line, code, comment):
+    assert gl.split_comment(line) == (code, comment)
+
+
+def test_split_comment_without_parens_keeps_spacing():
+    assert gl.split_comment("  G1  X10 ; c") == ("  G1  X10", "; c")
+
+
+@pytest.mark.parametrize(
+    "line, command, words",
+    [
+        ("G1 X10 (move E5) Y20", "G1", {"X": 10.0, "Y": 20.0}),
+        ("(a ; b) G1 X1", "G1", {"X": 1.0}),
+        ("((E5)) G1 X1", "G1", {"X": 1.0}),
+        ("G1 X1 (open E5", "G1", {"X": 1.0}),
+        ("M117 Done (E9)", "M117", {}),
+    ],
+)
+def test_parse_line_paren_comments_add_no_words(line, command, words):
+    parsed = gl.parse_line(line)
+    assert parsed.command == command
+    assert parsed.words == words
+
+
+def test_parse_words_ignores_comments():
+    assert gl.parse_words("(Surface006)") == {}
+    assert gl.parse_words("G1 X1 (E5) ; Y2") == {"X": 1.0}
+
+
+def test_paren_comment_line_is_a_comment_not_blank():
+    line = gl.parse_line("(Exported by FreeCAD)")
+    assert line.comment == "(Exported by FreeCAD)"
+    assert not line.is_blank
+
+
+def test_paren_comment_counts_as_comment_only_line():
+    stats = gl.compute_stats(gl.parse_lines("(Exported by FreeCAD)\nG1 X1 Y1"))
+    assert stats.comment_only_lines == 1
+    assert stats.blank_lines == 0
+
+
+def test_paren_comment_survives_text_round_trip():
+    text = "(header)\nG1 X1 (note) Y2 ; end\n"
+    assert gl.to_text(gl.from_text(text)) == text
+
+
+def test_translate_does_not_rewrite_word_inside_paren_comment():
+    lines = gl.parse_lines("G90\nG1 (X5) X10 Y10")
+    assert gl.translate_xy(lines, 100.0, 0.0)[1].raw == "G1 X110 Y10 (X5)"
+
+
+def test_translate_writes_omitted_axis_outside_paren_comment():
+    lines = gl.parse_lines("G90\nG1 X1 Y1\nG1 Y20 (from X5)")
+    moved = gl.translate_xy(lines, 100.0, 0.0)[2]
+    assert moved.raw.endswith("(from X5)")
+    assert gl.parse_line(moved.raw).words["X"] == pytest.approx(101.0)
+
+
+def test_translate_allow_arcs_does_not_rewrite_paren_comment():
+    lines = gl.parse_lines("G90\nG1 X1 Y1\nG3 (X5) X0 Y10 I-10 J0")
+    arc = next(ln for ln in gl.translate_xy_allow_arcs(lines, 100.0, 0.0) if ln.is_arc)
+    assert arc.raw == "G3 X100 Y10 I-10 J0 (X5)"
+
+
+def test_rotate_does_not_rewrite_paren_comment():
+    lines = gl.parse_lines("G90\nG1 X10 Y0\nG3 (I5) X0 Y10 I-10 J0")
+    result = gl.rotate_xy(lines, 90.0, pivot_x=0.0, pivot_y=0.0)
+    arc = gl.parse_line(next(ln for ln in result if ln.is_arc).raw)
+    assert arc.comment == "(I5)"
+    assert arc.words["I"] == pytest.approx(0.0, abs=1e-3)
+    assert arc.words["J"] == pytest.approx(-10.0, abs=1e-3)
+
+
+def test_to_absolute_does_not_rewrite_paren_comment():
+    result = gl.to_absolute_xy(gl.parse_lines("G91\nG1 (X5) X1\nG1 (X5) X1"))
+    assert result[2].raw == "G1 X2 (X5)"
+
+
+def test_by_layer_does_not_rewrite_paren_comment():
+    lines = gl.parse_lines("G90\nG1 (X5) X10 Y10")
+    result = gl.apply_xy_transform_by_layer(lines, lambda x, y: (x + 100.0, y))
+    assert result[1].raw == "G1 X110 Y10 (X5)"
+
+
+def test_linearize_arcs_keeps_paren_comment_on_first_segment():
+    lines = gl.parse_lines("G90\nG1 X10 Y0\nG3 X0 Y10 I-10 J0 (turn)")
+    result = gl.linearize_arcs(lines)
+    assert result[2].raw.endswith("(turn)")
+    assert not any("(turn)" in line.raw for line in result[3:])
 
 
 # ---------------------------------------------------------------------------
