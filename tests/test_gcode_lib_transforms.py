@@ -128,6 +128,29 @@ def test_replace_or_append_does_not_match_inside_a_longer_word():
     assert gl.replace_or_append("G1 MAX5 Y20", "X", 1.0) == "G1 MAX5 Y20 X1"
 
 
+@pytest.mark.parametrize(
+    "code, val, expected",
+    [
+        pytest.param("G1 A1e2 E3", 5.0, "G1 A1e2 E5", id="replace"),
+        pytest.param("G1 A1e2 E3", None, "G1 A1e2", id="remove"),
+        pytest.param("G1 A1e2", 5.0, "G1 A1e2 E5", id="append"),
+        pytest.param("G1 A1e2", None, "G1 A1e2", id="remove-absent"),
+        pytest.param("G1 X1.5e-2 E3 Y2", 5.0, "G1 X1.5e-2 E5 Y2", id="signed-exponent"),
+    ],
+)
+def test_replace_or_append_e_word_ignores_exponents(code, val, expected):
+    assert gl.replace_or_append(code, "E", val) == expected
+
+
+def test_replace_or_append_changes_a_word_written_with_an_exponent():
+    assert gl.replace_or_append("G1 A1e2 E3", "A", 5.0) == "G1 A5 E3"
+
+
+def test_translate_xy_keeps_rotary_exponent_and_e_word():
+    moved = gl.translate_xy(gl.parse_lines("G90\nG1 X10 Y20 A1e2 E3"), 5.0, 10.0)[1]
+    assert moved.raw == "G1 X15 Y30 A1e2 E3"
+
+
 def test_translate_xy_keeps_compact_words_free_of_duplicates():
     moved = gl.translate_xy(gl.parse_lines("G90\nG1 X10Y20E1.5"), 5.0, 7.0)[1]
     assert moved.raw == "G1 X15Y27E1.5"

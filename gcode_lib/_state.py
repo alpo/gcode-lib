@@ -213,6 +213,11 @@ def fmt_axis(
     return fmt_float(v, places)
 
 
+# Scanning whole words stops the exponent in "A1e2" being read as an E word.  Words
+# may touch their neighbours ("G1X10Y20"), and a number may end in "." ("X10.").
+_WORD_RE = re.compile(rf"(?i)(?<![a-z])([a-z])\s*{_NUM_RE}(?![\d.])(\s*)")
+
+
 def replace_or_append(
     code: str,
     axis: str,
@@ -227,16 +232,17 @@ def replace_or_append(
     whitespace after it are removed; *code* is otherwise left as it was.
     """
     axis = axis.upper()
-    # Words may touch their neighbours ("G1X10Y20"), and a number may end in "." ("X10.").
-    pat = re.compile(rf"(?i)(?<![a-z]){axis}\s*{_NUM_RE}(?![\d.])(\s*)")
+    word = next((m for m in _WORD_RE.finditer(code) if m.group(1).upper() == axis), None)
 
     if val is None:
-        return pat.sub("", code, count=1).rstrip()
+        if word is None:
+            return code.rstrip()
+        return (code[:word.start()] + code[word.end():]).rstrip()
 
     tok = f"{axis}{fmt_axis(axis, val, xy_decimals, other_decimals)}"
-    if pat.search(code):
-        return pat.sub(lambda m: tok + m.group(1), code, count=1)
-    return code + " " + tok
+    if word is None:
+        return code + " " + tok
+    return code[:word.start()] + tok + word.group(2) + code[word.end():]
 
 
 # ---------------------------------------------------------------------------
