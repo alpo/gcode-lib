@@ -43,6 +43,7 @@ def split_comment(line: str) -> Tuple[str, str]:
             if ch == "(":
                 depth = 1
                 start = i
+                code_chars.append(" ")  # keeps the words either side of the comment apart
             else:
                 code_chars.append(ch)
         elif ch == "(":

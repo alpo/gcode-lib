@@ -238,6 +238,8 @@ def test_parse_paren_preserves_raw():
         pytest.param("((E5)) G1 X1", "G1 X1", "((E5))", id="nested"),
         pytest.param("G1 X1 (open E5", "G1 X1", "(open E5", id="unclosed"),
         pytest.param("G1 X1 ) Y2 (c)", "G1 X1 ) Y2", "(c)", id="stray-close"),
+        pytest.param("G1 X10(note)E1 Y20", "G1 X10 E1 Y20", "(note)", id="between-words"),
+        pytest.param("G1(a)X1(b)(c)Y2", "G1 X1 Y2", "(a) (b) (c)", id="no-spaces-around"),
     ],
 )
 def test_split_comment_parentheses(line, code, comment):
@@ -256,6 +258,8 @@ def test_split_comment_without_parens_keeps_spacing():
         ("((E5)) G1 X1", "G1", {"X": 1.0}),
         ("G1 X1 (open E5", "G1", {"X": 1.0}),
         ("M117 Done (E9)", "M117", {}),
+        ("G1 X10(note)E1 Y20", "G1", {"X": 10.0, "E": 1.0, "Y": 20.0}),
+        ("G1(a)X1", "G1", {"X": 1.0}),
     ],
 )
 def test_parse_line_paren_comments_add_no_words(line, command, words):
@@ -289,6 +293,18 @@ def test_paren_comment_survives_text_round_trip():
 def test_translate_does_not_rewrite_word_inside_paren_comment():
     lines = gl.parse_lines("G90\nG1 (X5) X10 Y10")
     assert gl.translate_xy(lines, 100.0, 0.0)[1].raw == "G1 X110 Y10 (X5)"
+
+
+def test_translate_rewrites_move_after_leading_paren_comment():
+    lines = gl.parse_lines("G90\n(move from X0 Y0) G1 X10 Y20")
+    moved = gl.translate_xy(lines, 5.0, 5.0)[1]
+    assert moved.raw == "G1 X15 Y25 (move from X0 Y0)"
+
+
+def test_translate_keeps_extrusion_when_comment_separates_words():
+    lines = gl.parse_lines("G90\nG1 X10(note)E1 Y20")
+    moved = gl.translate_xy(lines, 5.0, 5.0)[1]
+    assert moved.raw == "G1 X15 E1 Y25 (note)"
 
 
 def test_translate_writes_omitted_axis_outside_paren_comment():
