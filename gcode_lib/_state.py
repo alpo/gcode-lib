@@ -216,18 +216,27 @@ def fmt_axis(
 def replace_or_append(
     code: str,
     axis: str,
-    val: float,
+    val: Optional[float],
     xy_decimals: int = DEFAULT_XY_DECIMALS,
     other_decimals: int = DEFAULT_OTHER_DECIMALS,
 ) -> str:
-    """Replace the value of *axis* in *code*, or append it if absent.
+    """Set, add or remove the *axis* word in *code*.
 
-    Only the first occurrence of the axis letter is replaced.
+    Only the first occurrence of the axis letter is changed.  With a *val*, the
+    word is replaced, or appended if absent.  With ``None``, the word and the
+    whitespace after it are removed; *code* is otherwise left as it was.
     """
     axis = axis.upper()
+    # Words may touch their neighbours ("G1X10Y20"), and a number may end in "." ("X10.").
+    pat = re.compile(rf"(?i)(?<![a-z]){axis}\s*{_NUM_RE}(?![\d.])(\s*)")
+
+    if val is None:
+        return pat.sub("", code, count=1).rstrip()
+
     tok = f"{axis}{fmt_axis(axis, val, xy_decimals, other_decimals)}"
-    pat = re.compile(rf"(?i)\b{axis}\s*({_NUM_RE})\b")
-    return pat.sub(tok, code, count=1) if pat.search(code) else (code + " " + tok)
+    if pat.search(code):
+        return pat.sub(lambda m: tok + m.group(1), code, count=1)
+    return code + " " + tok
 
 
 # ---------------------------------------------------------------------------

@@ -66,6 +66,73 @@ def test_replace_or_append_only_first_occurrence():
     assert result.count("X5") == 1
 
 
+@pytest.mark.parametrize(
+    "code, axis, expected",
+    [
+        pytest.param("G1 X10 Y20", "X", "G1 Y20", id="first-word"),
+        pytest.param("G1 X10 Y20", "Y", "G1 X10", id="last-word-leaves-no-trailing-space"),
+        pytest.param("G1 X10 Y20 E1", "Y", "G1 X10 E1", id="middle-word"),
+        pytest.param("G1 x10 Y20", "X", "G1 Y20", id="lowercase-word"),
+        pytest.param("G1 X10 Y20", "x", "G1 Y20", id="lowercase-axis"),
+        pytest.param("G1 X-1.5e2 Y20", "X", "G1 Y20", id="exponent"),
+        pytest.param("G1 X 10 Y20", "X", "G1 Y20", id="space-before-number"),
+        pytest.param("G1 X10. Y20", "X", "G1 Y20", id="trailing-dot"),
+        pytest.param("G1 Y20 X10.", "X", "G1 Y20", id="trailing-dot-at-end"),
+        pytest.param("G1 X10 X20", "X", "G1 X20", id="first-occurrence-only"),
+    ],
+)
+def test_replace_or_append_none_removes_word(code, axis, expected):
+    assert gl.replace_or_append(code, axis, None) == expected
+
+
+def test_replace_or_append_none_with_missing_axis_changes_nothing():
+    assert gl.replace_or_append("G1 Y20", "X", None) == "G1 Y20"
+
+
+def test_replace_or_append_can_remap_an_axis():
+    code = "G1 X10 Y20"
+    code = gl.replace_or_append(code, "X", None)
+    code = gl.replace_or_append(code, "F", 10.0)
+    assert code == "G1 Y20 F10"
+
+
+@pytest.mark.parametrize(
+    "code, expected",
+    [
+        pytest.param("G1 X10  Y20", "G1 X5  Y20", id="keeps-spacing-after-word"),
+        pytest.param("G1 X10. Y20", "G1 X5 Y20", id="trailing-dot"),
+        pytest.param("G1 Y20 X10.", "G1 Y20 X5", id="trailing-dot-at-end"),
+    ],
+)
+def test_replace_or_append_replaces_whole_word(code, expected):
+    assert gl.replace_or_append(code, "X", 5.0) == expected
+
+
+@pytest.mark.parametrize(
+    "code, axis, val, expected",
+    [
+        pytest.param("G1X10Y20", "X", 5.0, "G1X5Y20", id="after-command"),
+        pytest.param("G1 X10Y20", "Y", 5.0, "G1 X10Y5", id="after-word"),
+        pytest.param("G1 X10Y20E1", "Y", 5.0, "G1 X10Y5E1", id="between-words"),
+        pytest.param("G1 X10.Y20", "X", 5.0, "G1 X5Y20", id="trailing-dot"),
+        pytest.param("G1X10Y20", "X", None, "G1Y20", id="remove-first"),
+        pytest.param("G1 X10Y20E1", "Y", None, "G1 X10E1", id="remove-middle"),
+        pytest.param("G1 X10Y20", "Y", None, "G1 X10", id="remove-last"),
+    ],
+)
+def test_replace_or_append_handles_words_without_spaces(code, axis, val, expected):
+    assert gl.replace_or_append(code, axis, val) == expected
+
+
+def test_replace_or_append_does_not_match_inside_a_longer_word():
+    assert gl.replace_or_append("G1 MAX5 Y20", "X", 1.0) == "G1 MAX5 Y20 X1"
+
+
+def test_translate_xy_keeps_compact_words_free_of_duplicates():
+    moved = gl.translate_xy(gl.parse_lines("G90\nG1 X10Y20E1.5"), 5.0, 7.0)[1]
+    assert moved.raw == "G1 X15Y27E1.5"
+
+
 # ---------------------------------------------------------------------------
 # linearize_arcs — basic
 # ---------------------------------------------------------------------------
