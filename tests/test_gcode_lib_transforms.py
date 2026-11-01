@@ -735,8 +735,8 @@ def test_linearize_arcs_preserves_rotational():
     lines = gl.parse_lines("G90\nG1 X0 Y0\nG2 X10 Y0 I5 J0 A180")
     result = gl.linearize_arcs(lines)
     g1s = [ln for ln in result if ln.command == "G1"]
-    # First G1 is the original G1 X0 Y0 (no A), second is the first arc segment
-    assert g1s[1].words.get("A") == pytest.approx(180.0)
+    # First G1 is the original G1 X0 Y0 (no A); the arc ends at the commanded angle
+    assert g1s[-1].words.get("A") == pytest.approx(180.0)
 
 
 def test_compute_bounds_skip_negative_y_keeps_y_zero():
@@ -1112,14 +1112,83 @@ def test_apply_xy_transform_by_layer_keeps_rotational_axes():
 
 
 @pytest.mark.parametrize("axis", ["A", "B", "C"])
-def test_linearize_arcs_writes_rotational_word_once(axis):
-    lines = gl.parse_lines(f"G90\nG1 X0 Y0\nG2 X10 Y0 I5 J0 {axis}180")
+def test_linearize_arcs_interpolates_rotational_axes(axis):
+    lines = gl.parse_lines(f"G90\nG1 X10 Y0\nG3 X0 Y10 I-10 J0 {axis}180")
+    result = gl.linearize_arcs(lines, seg_mm=1000.0, max_deg=50.0)
+    assert [ln.words[axis] for ln in result[2:]] == pytest.approx([90.0, 180.0])
+    assert f"{axis}90" in result[2].raw
+    assert f"{axis}180" in result[3].raw
+
+
+def test_linearize_arcs_interpolates_from_current_rotational_position():
+    lines = gl.parse_lines("G90\nG1 X10 Y0 A90\nG3 X0 Y10 I-10 J0 A270")
+    result = gl.linearize_arcs(lines, seg_mm=1000.0, max_deg=50.0)
+    assert [ln.words["A"] for ln in result[2:]] == pytest.approx([180.0, 270.0])
+
+
+def test_linearize_arcs_interpolates_relative_rotational_steps():
+    lines = gl.parse_lines("G91\nG1 X10 Y0 A10\nG3 X-10 Y10 I-10 J0 A90")
+    result = gl.linearize_arcs(lines, seg_mm=1000.0, max_deg=50.0)
+    assert [ln.words["A"] for ln in result[2:]] == pytest.approx([45.0, 45.0])
+    assert _final_abc(result)[0] == pytest.approx(100.0)
+
+
+def test_linearize_arcs_tracks_rotational_position_between_arcs():
+    lines = gl.parse_lines(
+        "G90\nG1 X10 Y0\nG3 X0 Y10 I-10 J0 A90\nG3 X-10 Y0 I0 J-10 A180"
+    )
+    result = gl.linearize_arcs(lines, seg_mm=1000.0, max_deg=50.0)
+    assert [ln.words["A"] for ln in result[2:]] == pytest.approx([45.0, 90.0, 135.0, 180.0])
+
+
+def test_linearize_arcs_tracks_relative_rotational_position_between_arcs():
+    lines = gl.parse_lines("G91\nG1 X10 Y0\nG3 X-10 Y10 I-10 J0 A90\nG3 X-10 Y-10 I0 J-10 A90")
+    assert _final_abc(gl.linearize_arcs(lines)) == pytest.approx((180.0, 0.0, 0.0), abs=1e-4)
+
+
+def test_linearize_arcs_relative_rotational_rounding_does_not_accumulate():
+    lines = gl.parse_lines("G91\nG1 X10 Y0\nG3 I-10 J0 A0.00007")
     result = gl.linearize_arcs(lines)
-    carrying = [ln for ln in result if axis in ln.words]
-    assert len(carrying) == 1
-    assert f"{axis}180" in carrying[0].raw
+    assert len(result) > 300
+    assert _final_abc(result)[0] == pytest.approx(0.00007, abs=1e-5)
+
+
+def test_linearize_arcs_writes_only_the_rotational_axes_on_the_arc():
+    lines = gl.parse_lines("G90\nG1 X10 Y0\nG3 X0 Y10 I-10 J0 B90")
+    for line in gl.linearize_arcs(lines)[2:]:
+        assert "B" in line.words
+        assert "A" not in line.words and "C" not in line.words
 
 
 def test_linearize_arcs_relative_rotational_axes_end_where_source_ends():
     src = gl.parse_lines("G91\nG1 X10 Y0 A10 B1 C2\nG3 X-10 Y10 I-10 J0 A5 B2 C3")
     assert _final_abc(gl.linearize_arcs(src)) == pytest.approx(_final_abc(src))
+
+
+def test_translate_xy_leaves_compact_rotational_words_verbatim():
+    moved = gl.translate_xy(gl.parse_lines("G90\nG1 X10 Y20 A30B45C60"), 5.0, 10.0)[1]
+    assert moved.raw == "G1 X15 Y30 A30B45C60"
+
+
+def test_by_layer_leaves_compact_rotational_words_verbatim():
+    lines = gl.parse_lines("G90\nG1 X10 Y20 A30B45C60")
+    result = gl.apply_xy_transform_by_layer(lines, _shift_x)
+    assert result[1].raw == "G1 X110 Y20 A30B45C60"
+
+
+def test_to_absolute_xy_handles_compact_rotational_words():
+    lines = gl.parse_lines("G91\nG1 X1 A10B20\nG1 X1 A10B20")
+    assert gl.to_absolute_xy(lines)[2].raw == "G1 X2 A20B40"
+
+
+def test_e_word_directly_after_rotational_word_keeps_extrusion():
+    line = gl.parse_line("G1 X10 Y20 A30E1.5")
+    assert (line.words["A"], line.words["E"]) == pytest.approx((30.0, 1.5))
+    moved = gl.translate_xy([line], 5.0, 10.0)[0]
+    assert moved.raw == "G1 X15 Y30 A30E1.5"
+
+
+def test_linearize_arcs_keeps_e_word_after_rotational_word():
+    lines = gl.parse_lines("G90\nG1 X10 Y0\nG3 X0 Y10 I-10 J0 A90E1.5")
+    last = gl.linearize_arcs(lines)[-1]
+    assert (last.words["A"], last.words["E"]) == pytest.approx((90.0, 1.5))
