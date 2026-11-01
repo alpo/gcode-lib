@@ -212,8 +212,8 @@ def replace_or_append(
     whitespace after it are removed; *code* is otherwise left as it was.
     """
     axis = axis.upper()
-    # The lookahead also consumes a trailing "." (as in "X10."), common in CNC output.
-    pat = re.compile(rf"(?i)\b{axis}\s*{_NUM_RE}(?![\w.])(\s*)")
+    # Words may touch their neighbours ("G1X10Y20"), and a number may end in "." ("X10.").
+    pat = re.compile(rf"(?i)(?<![a-z]){axis}\s*{_NUM_RE}(?![\d.])(\s*)")
 
     if val is None:
         return pat.sub("", code, count=1).rstrip()

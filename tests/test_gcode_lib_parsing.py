@@ -81,6 +81,20 @@ def test_parse_words_scientific_notation():
     assert d["E"] == pytest.approx(1.5e-3)
 
 
+@pytest.mark.parametrize(
+    "code, expected",
+    [
+        pytest.param("G1 X10E1", {"X": 10.0, "E": 1.0}, id="uppercase-e-is-a-word"),
+        pytest.param("G1 X10E1.5", {"X": 10.0, "E": 1.5}, id="uppercase-e-decimal"),
+        pytest.param("G1 X10e1.5", {"X": 10.0, "E": 1.5}, id="lowercase-e-decimal"),
+        pytest.param("G1 X1e2", {"X": 100.0}, id="lowercase-exponent"),
+        pytest.param("G1 X1e+2 Y2e-1", {"X": 100.0, "Y": 0.2}, id="signed-exponents"),
+    ],
+)
+def test_parse_words_separates_e_word_from_exponent(code, expected):
+    assert gl.parse_words(code) == pytest.approx(expected)
+
+
 def test_parse_words_with_ij():
     d = gl.parse_words("G2 X10 Y0 I5 J0")
     assert d["I"] == pytest.approx(5.0)

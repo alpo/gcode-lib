@@ -19,7 +19,8 @@ DEFAULT_OTHER_DECIMALS = 5    # Output decimal places for E/F/Z/I/J/K
 # Pre-compiled regexes
 _MOVE_RE = re.compile(r"^(G0|G1)\b", re.IGNORECASE)
 _ARC_RE  = re.compile(r"^(G2|G3)\b", re.IGNORECASE)
-_NUM_RE  = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+# An exponent is lowercase and integral, so "X10E1" and "X10e1.5" read as X10 then E.
+_NUM_RE  = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:(?-i:e)[+-]?\d+(?![\d.]))?"
 _AXIS_RE = re.compile(rf"([XYZEFRIJK])\s*({_NUM_RE})", re.IGNORECASE)
 
 # Binary .bgcode constants
