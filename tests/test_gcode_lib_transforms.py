@@ -66,6 +66,48 @@ def test_replace_or_append_only_first_occurrence():
     assert result.count("X5") == 1
 
 
+@pytest.mark.parametrize(
+    "code, axis, expected",
+    [
+        pytest.param("G1 X10 Y20", "X", "G1 Y20", id="first-word"),
+        pytest.param("G1 X10 Y20", "Y", "G1 X10", id="last-word-leaves-no-trailing-space"),
+        pytest.param("G1 X10 Y20 E1", "Y", "G1 X10 E1", id="middle-word"),
+        pytest.param("G1 x10 Y20", "X", "G1 Y20", id="lowercase-word"),
+        pytest.param("G1 X10 Y20", "x", "G1 Y20", id="lowercase-axis"),
+        pytest.param("G1 X-1.5e2 Y20", "X", "G1 Y20", id="exponent"),
+        pytest.param("G1 X 10 Y20", "X", "G1 Y20", id="space-before-number"),
+        pytest.param("G1 X10. Y20", "X", "G1 Y20", id="trailing-dot"),
+        pytest.param("G1 Y20 X10.", "X", "G1 Y20", id="trailing-dot-at-end"),
+        pytest.param("G1 X10 X20", "X", "G1 X20", id="first-occurrence-only"),
+    ],
+)
+def test_replace_or_append_none_removes_word(code, axis, expected):
+    assert gl.replace_or_append(code, axis, None) == expected
+
+
+def test_replace_or_append_none_with_missing_axis_changes_nothing():
+    assert gl.replace_or_append("G1 Y20", "X", None) == "G1 Y20"
+
+
+def test_replace_or_append_can_remap_an_axis():
+    code = "G1 X10 Y20"
+    code = gl.replace_or_append(code, "X", None)
+    code = gl.replace_or_append(code, "F", 10.0)
+    assert code == "G1 Y20 F10"
+
+
+@pytest.mark.parametrize(
+    "code, expected",
+    [
+        pytest.param("G1 X10  Y20", "G1 X5  Y20", id="keeps-spacing-after-word"),
+        pytest.param("G1 X10. Y20", "G1 X5 Y20", id="trailing-dot"),
+        pytest.param("G1 Y20 X10.", "G1 Y20 X5", id="trailing-dot-at-end"),
+    ],
+)
+def test_replace_or_append_replaces_whole_word(code, expected):
+    assert gl.replace_or_append(code, "X", 5.0) == expected
+
+
 # ---------------------------------------------------------------------------
 # linearize_arcs — basic
 # ---------------------------------------------------------------------------
