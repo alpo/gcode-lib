@@ -218,6 +218,13 @@ def fmt_axis(
 _WORD_RE = re.compile(rf"(?i)(?<![a-z])([a-z])\s*{_NUM_RE}(?![\d.])(\s*)")
 
 
+def _join_words(left: str, right: str) -> str:
+    """Join two pieces of code, keeping a lowercase ``e`` word out of the number before it."""
+    if right.startswith("e") and (left[-1:].isdigit() or left.endswith(".")):
+        return left + " " + right
+    return left + right
+
+
 def replace_or_append(
     code: str,
     axis: str,
@@ -237,12 +244,12 @@ def replace_or_append(
     if val is None:
         if word is None:
             return code.rstrip()
-        return (code[:word.start()] + code[word.end():]).rstrip()
+        return _join_words(code[:word.start()], code[word.end():]).rstrip()
 
     tok = f"{axis}{fmt_axis(axis, val, xy_decimals, other_decimals)}"
     if word is None:
         return code + " " + tok
-    return code[:word.start()] + tok + word.group(2) + code[word.end():]
+    return _join_words(code[:word.start()] + tok, word.group(2) + code[word.end():])
 
 
 # ---------------------------------------------------------------------------

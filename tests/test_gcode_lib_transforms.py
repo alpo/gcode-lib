@@ -151,6 +151,30 @@ def test_translate_xy_keeps_rotary_exponent_and_e_word():
     assert moved.raw == "G1 X15 Y30 A1e2 E3"
 
 
+@pytest.mark.parametrize(
+    "code, axis, val, expected",
+    [
+        pytest.param("G1 X1e2e3 Y20", "X", 105.0, "G1 X105 e3 Y20", id="replace-before-e"),
+        pytest.param("G1 X1Y2 e3", "Y", None, "G1 X1 e3", id="remove-spaced"),
+        pytest.param("G1 X1Y2e3", "Y", None, "G1 X1", id="exponent-belongs-to-its-word"),
+        pytest.param("G1 X1.Y2 e3", "Y", None, "G1 X1. e3", id="remove-after-trailing-dot"),
+        pytest.param("G1 X1Y2 E3", "Y", None, "G1 X1E3", id="uppercase-e-needs-no-gap"),
+        pytest.param("G1 X1Y2 F3", "Y", None, "G1 X1F3", id="other-words-need-no-gap"),
+        pytest.param("e3 Y2", "Y", None, "e3", id="nothing-before"),
+    ],
+)
+def test_replace_or_append_keeps_e_word_out_of_the_number_before_it(code, axis, val, expected):
+    result = gl.replace_or_append(code, axis, val)
+    assert result == expected
+    untouched = {k: v for k, v in gl.parse_words(code).items() if k != axis.upper()}
+    assert {k: v for k, v in gl.parse_words(result).items() if k != axis.upper()} == untouched
+
+
+def test_translate_xy_keeps_compact_e_word_after_exponent():
+    moved = gl.translate_xy(gl.parse_lines("G90\nG1 X1e2e3 Y20"), 5.0, 10.0)[1]
+    assert gl.parse_line(moved.raw).words == pytest.approx({"X": 105.0, "Y": 30.0, "E": 3.0})
+
+
 def test_translate_xy_keeps_compact_words_free_of_duplicates():
     moved = gl.translate_xy(gl.parse_lines("G90\nG1 X10Y20E1.5"), 5.0, 7.0)[1]
     assert moved.raw == "G1 X15Y27E1.5"
